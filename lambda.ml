@@ -1,10 +1,11 @@
-
 (* TYPE DEFINITIONS *)
 
 type ty =
     TyBool
   | TyNat
   | TyArr of ty * ty
+  | TyString
+  | TyTuple of ty list
 ;;
 
 type context =
@@ -23,6 +24,11 @@ type term =
   | TmAbs of string * ty * term
   | TmApp of term * term
   | TmLetIn of string * term * term
+  | TmFix of term
+  | TmString of string
+  | TmConcat of term * term
+  | TmTuple of term list
+  | TmProj of term * string
 ;;
 
 
@@ -43,19 +49,30 @@ let getbinding ctx x =
 
 (* TYPE MANAGEMENT (TYPING) *)
 
-let rec string_of_ty ty = match ty with
+let rec string_of_ty ty = 
+  match ty with
     TyBool ->
       "Bool"
   | TyNat ->
       "Nat"
   | TyArr (ty1, ty2) ->
       "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
+  | TyString ->
+      "String"
+  | TyTuple ty ->
+      let rec print_tyTuple l = 
+        match l with
+            h :: [] -> string_of_ty h
+          | h :: t -> (string_of_ty h ^ ", ") ^ print_tyTuple t
+          | [] -> raise (Invalid_argument "empty tuple") 
+      in "{" ^ print_tyTuple ty ^ "}" 
 ;;
 
 exception Type_error of string
 ;;
 
-let rec typeof ctx tm = match tm with
+let rec typeof ctx tm = 
+  match tm with
     (* T-True *)
     TmTrue ->
       TyBool
@@ -118,6 +135,35 @@ let rec typeof ctx tm = match tm with
       let tyT1 = typeof ctx t1 in
       let ctx' = addbinding ctx x tyT1 in
       typeof ctx' t2
+
+    (* T-Fix *)
+  | TmFix t1 ->
+      let tyT1 = typeof ctx t1 in
+      (match tyT1 with
+        TyArr (tyT11, tyT12) ->
+          if tyT11 = tyT12 then tyT12
+          else raise (Type_error "result of body not compativle with domain")
+      | _ -> raise (Type_error "arrow type expected"))
+  
+    (* T-String *)
+  | TmString _ ->
+      TyString
+
+    (* T-Concat *)
+  | TmConcat (t1, t2) ->
+      if typeof ctx t1 = TyString && typeof ctx t2 = TyString then TyString
+      else raise (Type_error "argument of concat is not a string")
+
+    (* T-Tuple *)
+  | TmTuple t1 ->
+      TyTuple (List.map (typeof ctx) t1)
+
+    (* T-Proj *)
+  | TmProj (t, s) ->
+    (match typeof ctx t with
+        TyTuple l -> (try List.nth l (int_of_string s - 1) with
+          | _ -> raise (Type_error ("label " ^ s ^ " not found")))
+        | _ -> raise (Type_error "tuple type expected"))
 ;;
 
 
@@ -152,6 +198,20 @@ let rec string_of_term = function
       "(" ^ string_of_term t1 ^ " " ^ string_of_term t2 ^ ")"
   | TmLetIn (s, t1, t2) ->
       "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
+  | TmFix t ->
+      "(fix " ^ string_of_term t ^ ")"
+  | TmString s ->
+      "\"" ^ s ^ "\""
+  | TmConcat (t1, t2) ->
+      "concat " ^ "(" ^ string_of_term t1 ^ ")" ^ " " ^ "(" ^ string_of_term t2 ^ ")"
+  | TmTuple l ->
+      let rec aux = function
+          [] -> ""
+        | h::[] -> string_of_term h
+        | h::t -> string_of_term h ^ ", " ^ aux t
+    in "{" ^ (aux l) ^ "}"
+  | TmProj (t, s) ->
+      string_of_term t ^ "." ^ s
 ;;
 
 let rec ldif l1 l2 = match l1 with
@@ -187,6 +247,21 @@ let rec free_vars tm = match tm with
       lunion (free_vars t1) (free_vars t2)
   | TmLetIn (s, t1, t2) ->
       lunion (ldif (free_vars t2) [s]) (free_vars t1)
+  | TmFix t ->
+      free_vars t
+  | TmString _ ->
+      []
+  | TmConcat (t1, t2) ->
+      lunion (free_vars t1) (free_vars t2)
+  | TmTuple t ->
+      let rec aux l = 
+        match l with
+            h::[] -> free_vars h
+          | h::t -> lunion (free_vars h) (aux t)
+          | [] -> []
+      in aux t  
+  | TmProj (t, _) ->
+      free_vars t
 ;;
 
 let rec fresh_name x l =
@@ -226,6 +301,16 @@ let rec subst x s tm = match tm with
            then TmLetIn (y, subst x s t1, subst x s t2)
            else let z = fresh_name y (free_vars t2 @ fvs) in
                 TmLetIn (z, subst x s t1, subst x s (subst y (TmVar z) t2))
+  | TmFix t ->
+      TmFix (subst x s t)
+  | TmString st ->
+      TmString st
+  | TmConcat (t1, t2) ->
+      TmConcat (subst x s t1, subst x s t2)
+  | TmTuple t ->
+      TmTuple (List.map (subst x s) t)
+  | TmProj (t1, t2) ->
+      TmProj (subst x s t1, t2)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -238,6 +323,8 @@ let rec isval tm = match tm with
     TmTrue  -> true
   | TmFalse -> true
   | TmAbs _ -> true
+  | TmString _ -> true
+  | TmTuple l -> List.for_all (fun t -> isval t) l
   | t when isnumericval t -> true
   | _ -> false
 ;;
@@ -313,6 +400,45 @@ let rec eval1 tm = match tm with
       let t1' = eval1 t1 in
       TmLetIn (x, t1', t2)
 
+    (* E-FixBeta *)
+  | TmFix (TmAbs (x, _, t2)) ->
+      subst x tm t2
+  
+    (* E-Fix *)
+  | TmFix t1 ->
+      let t1' = eval1 t1 in
+      TmFix t1'
+
+    (* E-Concat1 *)
+  | TmConcat (TmString s1, TmString s2) ->
+      TmString (s1 ^ s2)
+
+    (* E-Concat2 *)
+  | TmConcat (TmString s1, t2) ->
+      let t2' = eval1 t2 in
+      TmConcat (TmString s1, t2')
+
+    (* E-Concat3 *)
+  | TmConcat (t1, t2) ->
+      let t1' = eval1 t1 in
+      TmConcat (t1', t2)
+
+    (* E-Tuple *)
+  | TmTuple l ->
+      let rec aux = function
+          h::t when isval h -> let t' = aux t in h::t'
+        | h::t -> let h' = eval1 h in h'::t
+        | [] -> raise NoRuleApplies
+      in TmTuple (aux l)
+
+    (* E-Proj1 *)
+  | TmProj (TmTuple l as v, s) when isval v ->
+      List.nth l (int_of_string s - 1)
+
+    (* E-Proj2 *)
+  | TmProj (t, s) ->
+      let t' = eval1 t in TmProj(t', s)
+
   | _ ->
       raise NoRuleApplies
 ;;
@@ -324,4 +450,3 @@ let rec eval tm =
   with
     NoRuleApplies -> tm
 ;;
-
