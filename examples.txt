@@ -1,18 +1,27 @@
-true
-let x = true in x
-if false then true else false
-0
-succ (succ (succ 0))
-3
-succ (pred 0)
-iszero (pred (succ (succ 0)))
-if iszero 3 then 0 else 1
-iszero true
-if 1 then true else false
-if iszero 3 then 0 else false
-let id = Lx.x in id 3
-let id_bool = L x:Bool. x in id_bool true
-let id_nat = L x:Nat. x in id_nat 5
-let x = 5 in let id_nat = L x:Nat. x in id_nat x
-let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in let sum = fix sumaux in sum 21 34
-let fix = lambda f.(lambda x. f (lambda y. x x y)) (lambda x. f (lambda y. x x y)) in let sumaux = lambda f. (lambda n. (lambda m. if (iszero n) then m else succ (f (pred n) m))) in let sum = fix sumaux in let prodaux = lambda f. (lambda n. (lambda m. if (iszero m) then 0 else sum n (f n (pred m)))) in let prod = fix prodaux in prod 12 5
+>> true;;
+true : Bool
+
+>> let x = 5 in x;;
+5 : Nat
+
+>> letrec sum : Nat -> Nat -> Nat =
+    lambda n: Nat. lambda m: Nat. if iszero n then m else succ (sum (pred n) m)
+    in letrec prod : Nat -> Nat -> Nat =
+            L m:Nat. L n:Nat. if iszero m then 0 else sum n ( prod (pred m) n)
+            in prod 5 10;;
+50 : Nat
+
+>> letrec sum : Nat -> Nat -> Nat =
+    lambda n: Nat. lambda m: Nat. if iszero n then m else succ (sum (pred n) m)
+    in letrec prod : Nat -> Nat -> Nat =
+        lambda m:Nat. lambda n:Nat. if iszero m then 0 else sum n ( prod (pred m) n)
+        in letrec factorial : Nat -> Nat = 
+                lambda n: Nat. if iszero n then 1 else prod n (factorial (pred n))
+                in factorial 5;;
+120 : Nat
+
+>> {true, "cadena", 3}.1;;
+true : Bool
+
+>> {true, {"cadena1", "cadena2"}, 3}.2.1;;
+"cadena1" : String
