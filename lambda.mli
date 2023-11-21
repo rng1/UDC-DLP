@@ -1,8 +1,9 @@
-
 type ty =
     TyBool
   | TyNat
   | TyArr of ty * ty
+  | TyString
+  | TyTuple of ty list
 ;;
 
 type context =
@@ -21,6 +22,11 @@ type term =
   | TmAbs of string * ty * term
   | TmApp of term * term
   | TmLetIn of string * term * term
+  | TmFix of term (* TODO: no funciona? *)
+  | TmString of string
+  | TmConcat of term * term
+  | TmTuple of term list
+  | TmProj of term * string
 ;;
 
 val emptyctx : context;;
@@ -34,4 +40,3 @@ val typeof : context -> term -> ty;;
 val string_of_term : term -> string;;
 exception NoRuleApplies;;
 val eval : term -> term;;
-
