@@ -6,6 +6,7 @@ type ty =
   | TyArr of ty * ty
   | TyString
   | TyTuple of ty list
+  | TyRecord of (string * ty) list
 ;;
 
 type context =
@@ -28,6 +29,7 @@ type term =
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
+  | TmRecord of (string * term) list
   | TmProj of term * string
 ;;
 
@@ -66,6 +68,13 @@ let rec string_of_ty ty =
           | h :: t -> (string_of_ty h ^ ", ") ^ print_tyTuple t
           | [] -> raise (Invalid_argument "empty tuple") 
       in "{" ^ print_tyTuple ty ^ "}" 
+  | TyRecord ty ->
+      let rec print_tyRecord l = 
+        match l with
+            (i, h) :: [] -> i ^ ":" ^ string_of_ty h
+          | (i, h) :: t -> (i ^ ":" ^ string_of_ty h ^ ", ") ^ print_tyRecord t
+          | [] -> raise (Invalid_argument "empty record") 
+      in "{" ^ print_tyRecord ty ^ "}" 
 ;;
 
 exception Type_error of string
@@ -158,12 +167,18 @@ let rec typeof ctx tm =
   | TmTuple t1 ->
       TyTuple (List.map (typeof ctx) t1)
 
+    (* T-Record *)
+  | TmRecord t1 ->
+      TyRecord (List.combine (List.map fst t1) (List.map (typeof ctx) (List.map snd t1)))
+
     (* T-Proj *)
   | TmProj (t, s) ->
     (match typeof ctx t with
         TyTuple l -> (try List.nth l (int_of_string s - 1) with
           | _ -> raise (Type_error ("label " ^ s ^ " not found")))
-        | _ -> raise (Type_error "tuple type expected"))
+      | TyRecord l -> (try List.assoc s l with
+          | _ -> raise (Type_error ("label " ^ s  ^ " not found")))
+      | _ -> raise (Type_error "tuple/record type expected"))
 ;;
 
 
@@ -175,43 +190,80 @@ let rec string_of_term = function
   | TmFalse ->
       "false"
   | TmIf (t1,t2,t3) ->
-      "if " ^ "(" ^ string_of_term t1 ^ ")" ^
-      " then " ^ "(" ^ string_of_term t2 ^ ")" ^
-      " else " ^ "(" ^ string_of_term t3 ^ ")"
+      "if " ^ string_of_if t1 ^
+      " then " ^ string_of_then_else t2 ^
+      " else " ^ string_of_then_else t3
   | TmZero ->
       "0"
   | TmSucc t ->
-     let rec f n t' = match t' with
+      let rec f n t' = match t' with
           TmZero -> string_of_int n
         | TmSucc s -> f (n+1) s
-        | _ -> "succ " ^ "(" ^ string_of_term t ^ ")"
+        | _ -> "succ " ^ string_of_succ t
       in f 1 t
   | TmPred t ->
-      "pred " ^ "(" ^ string_of_term t ^ ")"
+      "pred " ^ string_of_app t
   | TmIsZero t ->
-      "iszero " ^ "(" ^ string_of_term t ^ ")"
+      "iszero " ^ string_of_app t
   | TmVar s ->
       s
   | TmAbs (s, tyS, t) ->
-      "(lambda " ^ s ^ ":" ^ string_of_ty tyS ^ ". " ^ string_of_term t ^ ")"
+      "lambda " ^ s ^ ":" ^ string_of_ty tyS ^ ". " ^ string_of_abs t
   | TmApp (t1, t2) ->
-      "(" ^ string_of_term t1 ^ " " ^ string_of_term t2 ^ ")"
+      string_of_app t1 ^ " " ^ string_of_app t2
   | TmLetIn (s, t1, t2) ->
-      "let " ^ s ^ " = " ^ string_of_term t1 ^ " in " ^ string_of_term t2
+      "let " ^ s ^ " = " ^ string_of_app t1 ^ " in " ^ string_of_app t2
   | TmFix t ->
-      "(fix " ^ string_of_term t ^ ")"
+      "fix " ^ string_of_app t
   | TmString s ->
       "\"" ^ s ^ "\""
   | TmConcat (t1, t2) ->
-      "concat " ^ "(" ^ string_of_term t1 ^ ")" ^ " " ^ "(" ^ string_of_term t2 ^ ")"
+      "concat " ^ string_of_app t1 ^ " " ^ string_of_app t2
   | TmTuple l ->
       let rec aux = function
           [] -> ""
-        | h::[] -> string_of_term h
-        | h::t -> string_of_term h ^ ", " ^ aux t
-    in "{" ^ (aux l) ^ "}"
+        | h :: [] -> string_of_term h
+        | h :: t -> string_of_term h ^ ", " ^ aux t
+    in "{" ^ aux l ^ "}"
+  | TmRecord l ->
+      let rec aux = function
+          [] -> ""
+        | (i, h) :: [] -> i ^ "=" ^ string_of_term h
+        | (i, h) :: t -> i ^ "=" ^ string_of_term h ^ ", " ^ aux t
+    in "{" ^ aux l ^ "}"
   | TmProj (t, s) ->
       string_of_term t ^ "." ^ s
+
+and string_of_if t = 
+  match t with
+      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+    | _ -> string_of_term t
+
+and string_of_then_else t = 
+  match t with
+      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+    | _ -> string_of_term t
+
+and string_of_succ t = 
+  match t with
+      TmPred t1 -> string_of_term t
+    | _ ->  "(" ^ string_of_term t ^ ")"
+
+and string_of_abs t = 
+  match t with
+      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+    | _ -> string_of_term t
+
+and string_of_app t = 
+  match t with
+      TmVar s -> s
+    | TmString s-> "\"" ^ s ^ "\""
+    | TmTrue -> "true"
+    | TmFalse -> "false"
+    | TmZero -> "0"
+    | TmPred t1 -> string_of_term t
+    | _ -> "(" ^ string_of_term t  ^ ")"
+
 ;;
 
 let rec ldif l1 l2 = match l1 with
@@ -256,10 +308,17 @@ let rec free_vars tm = match tm with
   | TmTuple t ->
       let rec aux l = 
         match l with
-            h::[] -> free_vars h
-          | h::t -> lunion (free_vars h) (aux t)
+            h :: [] -> free_vars h
+          | h :: t -> lunion (free_vars h) (aux t)
           | [] -> []
-      in aux t  
+      in aux t
+  | TmRecord t ->
+      let rec aux l =
+        match l with
+            (i, h) :: [] -> free_vars h
+          | (i, h) :: t -> lunion (free_vars h) (aux t)
+          | [] -> []
+      in aux t
   | TmProj (t, _) ->
       free_vars t
 ;;
@@ -309,6 +368,8 @@ let rec subst x s tm = match tm with
       TmConcat (subst x s t1, subst x s t2)
   | TmTuple t ->
       TmTuple (List.map (subst x s) t)
+  | TmRecord t ->
+      TmRecord (List.combine (List.map fst t) (List.map (subst x s) (List.map snd t)))
   | TmProj (t1, t2) ->
       TmProj (subst x s t1, t2)
 ;;
@@ -325,6 +386,7 @@ let rec isval tm = match tm with
   | TmAbs _ -> true
   | TmString _ -> true
   | TmTuple l -> List.for_all (fun t -> isval t) l
+  | TmRecord l -> List.for_all (fun t -> isval t) (List.map snd l)
   | t when isnumericval t -> true
   | _ -> false
 ;;
@@ -426,16 +488,28 @@ let rec eval1 tm = match tm with
     (* E-Tuple *)
   | TmTuple l ->
       let rec aux = function
-          h::t when isval h -> let t' = aux t in h::t'
-        | h::t -> let h' = eval1 h in h'::t
+          h :: t when isval h -> let t' = aux t in h::t'
+        | h :: t -> let h' = eval1 h in h'::t
         | [] -> raise NoRuleApplies
       in TmTuple (aux l)
 
-    (* E-Proj1 *)
+    (* E-Record *)
+  | TmRecord l ->
+      let rec aux = function
+          (i, h) :: t when isval h -> let t' = aux t in (i, h) :: t'
+        | (i, h) :: t -> let h' = eval1 h in (i, h') :: t
+        | [] -> raise NoRuleApplies
+      in TmRecord (aux l)
+
+    (* E-Proj-Tuple *)
   | TmProj (TmTuple l as v, s) when isval v ->
       List.nth l (int_of_string s - 1)
 
-    (* E-Proj2 *)
+    (* E-Proj-Record *)
+  | TmProj (TmRecord l as v, s) when isval v ->
+      List.assoc s l
+
+    (* E-Proj *)
   | TmProj (t, s) ->
       let t' = eval1 t in TmProj(t', s)
 
