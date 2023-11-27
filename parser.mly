@@ -56,7 +56,6 @@ term :
   | LETREC IDV COLON ty EQ term IN term
       { TmLetIn ($2, TmFix (TmAbs($2, $4, $6)), $8) }
 
-
 appTerm :
     pathTerm
       { $1 }
@@ -86,6 +85,8 @@ atomicTerm :
       { $2 }
   | LBRACE tupleTerm RBRACE
       { TmTuple $2 }
+  | LBRACE recordTerm RBRACE
+      { TmRecord $2 }
   | TRUE
       { TmTrue }
   | FALSE
@@ -120,4 +121,10 @@ tupleTerm :
     term
       { [$1] }
   | term COMMA tupleTerm
-      { $1::$3 }
+      { $1 :: $3 }
+
+recordTerm :
+    IDV EQ term
+      { [($1, $3)] }
+  | IDV EQ term COMMA recordTerm
+      { ($1, $3) :: $5 }
