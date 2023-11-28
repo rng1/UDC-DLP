@@ -16,14 +16,22 @@
 %token FIX
 %token IN
 %token CONCAT
+%token NIL
+%token CONS
+%token ISNIL
+%token HEAD
+%token TAIL
 %token BOOL
 %token NAT
 %token STRING
+%token LIST
 
 %token LPAREN
 %token RPAREN
 %token LBRACE
 %token RBRACE
+%token LBRACKET
+%token RBRACKET
 %token DOT
 %token COMMA
 %token EQ
@@ -36,13 +44,15 @@
 %token <string> STRINGV
 
 %start s
-%type <Lambda.term> s
+%type <Lambda.command> s
 
 %%
 
 s :
-    term EOF
-      { $1 }
+    IDV EQ term EOF
+      { Bind ($1, $3) }
+  | term EOF
+      { Eval $1 }
 
 term :
     appTerm
@@ -73,7 +83,7 @@ appTerm :
       { TmApp ($1, $2) }
 
 pathTerm :
-  | pathTerm DOT STRINGV
+  | pathTerm DOT IDV
       { TmProj ($1, $3) }
   | pathTerm DOT INTV
       { TmProj ($1, string_of_int $3) }
@@ -87,6 +97,16 @@ atomicTerm :
       { TmTuple $2 }
   | LBRACE recordTerm RBRACE
       { TmRecord $2 }
+  | NIL LBRACKET ty RBRACKET
+      { TmNil $3 }
+  | CONS LBRACKET ty RBRACKET atomicTerm atomicTerm
+      { TmCons ($3, $5, $6) }
+  | ISNIL LBRACKET ty RBRACKET atomicTerm
+      { TmIsnil ($3, $5) }
+  | HEAD LBRACKET ty RBRACKET atomicTerm
+      { TmHead ($3, $5) }
+  | TAIL LBRACKET ty RBRACKET atomicTerm
+      { TmTail ($3, $5) }
   | TRUE
       { TmTrue }
   | FALSE
@@ -100,6 +120,7 @@ atomicTerm :
         in f $1 }
   | STRINGV
       { TmString $1 }
+
 
 ty :
     atomicTy
@@ -116,6 +137,8 @@ atomicTy :
       { TyNat }
   | STRING
       { TyString }
+  | LIST LBRACKET ty RBRACKET
+      { TyList $3 }
 
 tupleTerm :
     term
