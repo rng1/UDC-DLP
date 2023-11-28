@@ -7,10 +7,11 @@ type ty =
   | TyString
   | TyTuple of ty list
   | TyRecord of (string * ty) list
+  | TyList of ty
 ;;
 
-type context =
-  (string * ty) list
+type 'a context =
+  (string * 'a) list
 ;;
 
 type term =
@@ -31,6 +32,16 @@ type term =
   | TmTuple of term list
   | TmRecord of (string * term) list
   | TmProj of term * string
+  | TmNil of ty
+  | TmCons of ty * term * term
+  | TmIsnil of ty * term
+  | TmHead of ty * term
+  | TmTail of ty * term
+;;
+
+type command =
+    Eval of term
+  | Bind of string * term
 ;;
 
 
@@ -74,7 +85,9 @@ let rec string_of_ty ty =
             (i, h) :: [] -> i ^ ":" ^ string_of_ty h
           | (i, h) :: t -> (i ^ ":" ^ string_of_ty h ^ ", ") ^ print_tyRecord t
           | [] -> raise (Invalid_argument "empty record") 
-      in "{" ^ print_tyRecord ty ^ "}" 
+      in "{" ^ print_tyRecord ty ^ "}"
+  | TyList ty ->
+      "List[" ^ string_of_ty ty ^ "]"
 ;;
 
 exception Type_error of string
@@ -151,7 +164,7 @@ let rec typeof ctx tm =
       (match tyT1 with
         TyArr (tyT11, tyT12) ->
           if tyT11 = tyT12 then tyT12
-          else raise (Type_error "result of body not compativle with domain")
+          else raise (Type_error "result of body not compatible with domain")
       | _ -> raise (Type_error "arrow type expected"))
   
     (* T-String *)
@@ -173,12 +186,49 @@ let rec typeof ctx tm =
 
     (* T-Proj *)
   | TmProj (t, s) ->
-    (match typeof ctx t with
-        TyTuple l -> (try List.nth l (int_of_string s - 1) with
-          | _ -> raise (Type_error ("label " ^ s ^ " not found")))
-      | TyRecord l -> (try List.assoc s l with
-          | _ -> raise (Type_error ("label " ^ s  ^ " not found")))
-      | _ -> raise (Type_error "tuple/record type expected"))
+      (match typeof ctx t with
+          TyTuple l -> (try List.nth l (int_of_string s - 1) with
+            | _ -> raise (Type_error ("label " ^ s ^ " not found")))
+        | TyRecord l -> (try List.assoc s l with
+            | _ -> raise (Type_error ("label " ^ s  ^ " not found")))
+        | _ -> raise (Type_error "tuple/record type expected"))
+  
+    (* T-Nil *)
+  | TmNil t1 ->
+      TyList t1
+  
+    (* T-Cons *)
+  | TmCons (ty, t1, t2) ->
+      let tyT1 = typeof ctx t1 in
+      let tyT2 = typeof ctx t2 in
+      (match tyT2 with
+          TyList ty21 ->
+            if ty21 = tyT1 then TyList ty
+            else raise (Type_error "list types don't match")
+        | _ -> raise (Type_error "list type expected"))
+  
+    (* T-Isnil *)
+  | TmIsnil (ty, t1) ->
+      let tyT1 = typeof ctx t1 in
+      (match tyT1 with
+          TyList _ -> TyBool
+        | _ -> raise (Type_error "list type expected"))
+
+    (* T-Head *)
+  | TmHead (ty, t1) ->
+      let tyT1 = typeof ctx t1 in
+      (match tyT1 with
+          TyList _ -> TyBool
+        | _ -> raise (Type_error "list type expected"))
+
+    (* T-Tail *)
+  | TmTail (ty, t1) ->
+      let tyT1 = typeof ctx t1 in
+      (match tyT1 with
+          TyList _ -> TyList ty
+        | _ -> raise (Type_error "list type expected"))
+
+
 ;;
 
 
@@ -233,6 +283,16 @@ let rec string_of_term = function
     in "{" ^ aux l ^ "}"
   | TmProj (t, s) ->
       string_of_term t ^ "." ^ s
+  | TmNil ty ->
+      "nil[" ^ string_of_ty ty ^ "]"
+  | TmCons (ty,h,t) ->
+      "cons[" ^ string_of_ty ty ^ "] " ^ string_of_term h ^ " " ^ string_of_term t
+  | TmIsnil (ty,t) ->
+      "isnil[" ^ string_of_ty ty ^ "] " ^ string_of_term t
+  | TmHead (ty,t) ->
+      "head[" ^ string_of_ty ty ^ "] " ^ string_of_term t
+  | TmTail (ty,t) ->
+      "tail[" ^ string_of_ty ty ^ "] " ^ string_of_term t
 
 and string_of_if t = 
   match t with
@@ -321,6 +381,16 @@ let rec free_vars tm = match tm with
       in aux t
   | TmProj (t, _) ->
       free_vars t
+  | TmNil _ -> 
+      []
+  | TmCons (ty, t1, t2) -> 
+      lunion (free_vars t1) (free_vars t2)
+  | TmIsnil (ty, t) ->
+      free_vars t
+  | TmHead (ty, t) ->
+      free_vars t
+  | TmTail (ty, t) ->
+      free_vars t
 ;;
 
 let rec fresh_name x l =
@@ -372,6 +442,16 @@ let rec subst x s tm = match tm with
       TmRecord (List.combine (List.map fst t) (List.map (subst x s) (List.map snd t)))
   | TmProj (t1, t2) ->
       TmProj (subst x s t1, t2)
+  | TmNil t -> 
+      TmNil t
+  | TmCons (ty, t1, t2) -> 
+      TmCons (ty, subst x s t1, subst x s t2)
+  | TmIsnil (ty, t) ->
+      TmIsnil (ty, subst x s t)
+  | TmHead (ty, t) ->
+      TmHead (ty, subst x s t)
+  | TmTail (ty, t) ->
+      TmTail (ty, subst x s t)
 ;;
 
 let rec isnumericval tm = match tm with
@@ -388,13 +468,15 @@ let rec isval tm = match tm with
   | TmTuple l -> List.for_all (fun t -> isval t) l
   | TmRecord l -> List.for_all (fun t -> isval t) (List.map snd l)
   | t when isnumericval t -> true
+  | TmNil _ -> true
+  | TmCons (_, t1, t2) -> isval t1 && isval t2
   | _ -> false
 ;;
 
 exception NoRuleApplies
 ;;
 
-let rec eval1 tm = match tm with
+let rec eval1 vctx tm = match tm with
     (* E-IfTrue *)
     TmIf (TmTrue, t2, _) ->
       t2
@@ -405,12 +487,12 @@ let rec eval1 tm = match tm with
 
     (* E-If *)
   | TmIf (t1, t2, t3) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmIf (t1', t2, t3)
 
     (* E-Succ *)
   | TmSucc t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmSucc t1'
 
     (* E-PredZero *)
@@ -423,7 +505,7 @@ let rec eval1 tm = match tm with
 
     (* E-Pred *)
   | TmPred t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmPred t1'
 
     (* E-IszeroZero *)
@@ -436,8 +518,12 @@ let rec eval1 tm = match tm with
 
     (* E-Iszero *)
   | TmIsZero t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmIsZero t1'
+
+    (* E-Var *)
+  | TmVar t1 ->
+      getbinding vctx t1
 
     (* E-AppAbs *)
   | TmApp (TmAbs(x, _, t12), v2) when isval v2 ->
@@ -445,12 +531,12 @@ let rec eval1 tm = match tm with
 
     (* E-App2: evaluate argument before applying function *)
   | TmApp (v1, t2) when isval v1 ->
-      let t2' = eval1 t2 in
+      let t2' = eval1 vctx t2 in
       TmApp (v1, t2')
 
     (* E-App1: evaluate function before argument *)
   | TmApp (t1, t2) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmApp (t1', t2)
 
     (* E-LetV *)
@@ -459,7 +545,7 @@ let rec eval1 tm = match tm with
 
     (* E-Let *)
   | TmLetIn(x, t1, t2) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmLetIn (x, t1', t2)
 
     (* E-FixBeta *)
@@ -468,7 +554,7 @@ let rec eval1 tm = match tm with
   
     (* E-Fix *)
   | TmFix t1 ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmFix t1'
 
     (* E-Concat1 *)
@@ -477,19 +563,19 @@ let rec eval1 tm = match tm with
 
     (* E-Concat2 *)
   | TmConcat (TmString s1, t2) ->
-      let t2' = eval1 t2 in
+      let t2' = eval1 vctx t2 in
       TmConcat (TmString s1, t2')
 
     (* E-Concat3 *)
   | TmConcat (t1, t2) ->
-      let t1' = eval1 t1 in
+      let t1' = eval1 vctx t1 in
       TmConcat (t1', t2)
 
     (* E-Tuple *)
   | TmTuple l ->
       let rec aux = function
           h :: t when isval h -> let t' = aux t in h::t'
-        | h :: t -> let h' = eval1 h in h'::t
+        | h :: t -> let h' = eval1 vctx h in h'::t
         | [] -> raise NoRuleApplies
       in TmTuple (aux l)
 
@@ -497,7 +583,7 @@ let rec eval1 tm = match tm with
   | TmRecord l ->
       let rec aux = function
           (i, h) :: t when isval h -> let t' = aux t in (i, h) :: t'
-        | (i, h) :: t -> let h' = eval1 h in (i, h') :: t
+        | (i, h) :: t -> let h' = eval1 vctx h in (i, h') :: t
         | [] -> raise NoRuleApplies
       in TmRecord (aux l)
 
@@ -511,16 +597,69 @@ let rec eval1 tm = match tm with
 
     (* E-Proj *)
   | TmProj (t, s) ->
-      let t' = eval1 t in TmProj(t', s)
+      let t' = eval1 vctx t in TmProj (t', s)
+
+    (* E-Cons1 *)
+  | TmCons (ty, t1, t2) when isval t1 -> 
+      TmCons (ty, t1, eval1 vctx t2) 
+
+    (* E-Cons2 *)
+  | TmCons (ty, t1, t2) -> 
+      TmCons (ty, (eval1 vctx t1), t2)
+
+    (* E-Isnil1 *)
+  | TmIsnil (ty, TmNil(_)) -> 
+      TmTrue  
+
+    (* E-Isnil2 *)
+  | TmIsnil (ty, TmCons(_, _, _)) -> 
+      TmFalse
+
+    (* E-Isnil3 *)
+  | TmIsnil (ty, t) -> 
+      TmIsnil (ty, eval1 vctx t)
+
+    (* E-Head1 *)
+  | TmHead (ty, TmCons(_, t, _)) -> 
+      t
+
+    (* E-Head2 *)
+  | TmHead (ty,t) -> 
+      TmHead (ty, eval1 vctx t)
+
+    (* E-Tail1 *)
+  | TmTail (ty, TmCons(_, _, t)) -> 
+      t
+
+    (* E-Tail2 *)
+  | TmTail (ty, t) -> 
+      TmTail (ty, eval1 vctx t)
 
   | _ ->
       raise NoRuleApplies
 ;;
 
-let rec eval tm =
+let apply_ctx ctx tm =
+  List.fold_left (fun t x -> subst x (getbinding ctx x) t) tm (free_vars tm)
+;;
+
+let rec eval vctx tm =
   try
-    let tm' = eval1 tm in
-    eval tm'
+    let tm' = eval1 vctx tm in
+    eval vctx tm'
   with
-    NoRuleApplies -> tm
+    NoRuleApplies -> apply_ctx vctx tm
+;;
+
+let execute (vctx, tctx) = function
+    Eval tm ->
+      let tyTm = typeof tctx tm in
+      let tm' = eval vctx tm in
+      print_endline ("- : " ^ string_of_ty tyTm ^ " = " ^ string_of_term tm');
+      (vctx, tctx)
+  | Bind (s, tm) ->
+      let tyTm = typeof tctx tm in
+      let tm' = eval vctx tm in
+      print_endline (s ^ " : " ^ string_of_ty tyTm ^ " = " ^ string_of_term tm');
+      (addbinding vctx s tm', addbinding tctx s tyTm)
 ;;
