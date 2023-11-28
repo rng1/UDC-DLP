@@ -20,13 +20,22 @@ rule token = parse
   | "fix"       { FIX }
   | "in"        { IN }
   | "concat"    { CONCAT }
+  | "nil"       { NIL }
+  | "cons"      { CONS }
+  | "isnil"     { ISNIL }
+  | "head"      { HEAD }
+  | "tail"      { TAIL }
   | "Bool"      { BOOL }
   | "Nat"       { NAT }
   | "String"    { STRING }
+  | "List"      { LIST }
+  | "list"      { LIST }
   | '('         { LPAREN }
   | ')'         { RPAREN }
   | '{'         { LBRACE }
   | '}'         { RBRACE }
+  | '['         { LBRACKET }
+  | ']'         { RBRACKET }
   | '.'         { DOT }
   | ','         { COMMA }
   | '='         { EQ }
