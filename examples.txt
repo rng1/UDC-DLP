@@ -1,27 +1,57 @@
 >> true;;
-true : Bool
+- : Bool = true
 
 >> let x = 5 in x;;
-5 : Nat
+- : Nat = 5
 
 >> letrec sum : Nat -> Nat -> Nat =
-    lambda n: Nat. lambda m: Nat. if iszero n then m else succ (sum (pred n) m)
+    L n : Nat. L m : Nat. if iszero n then m else succ (sum (pred n) m)
     in letrec prod : Nat -> Nat -> Nat =
-            L m:Nat. L n:Nat. if iszero m then 0 else sum n ( prod (pred m) n)
+            L m : Nat. L n : Nat. if iszero m then 0 else sum n (prod (pred m) n)
             in prod 5 10;;
-50 : Nat
+- : Nat = 50
 
 >> letrec sum : Nat -> Nat -> Nat =
-    lambda n: Nat. lambda m: Nat. if iszero n then m else succ (sum (pred n) m)
+    L n : Nat. L m : Nat. if iszero n then m else succ (sum (pred n) m)
     in letrec prod : Nat -> Nat -> Nat =
-        lambda m:Nat. lambda n:Nat. if iszero m then 0 else sum n ( prod (pred m) n)
+        L m : Nat. L n : Nat. if iszero m then 0 else sum n (prod (pred m) n)
         in letrec factorial : Nat -> Nat = 
-                lambda n: Nat. if iszero n then 1 else prod n (factorial (pred n))
+                L n : Nat. if iszero n then 1 else prod n (factorial (pred n))
                 in factorial 5;;
-120 : Nat
+- : Nat = 120
 
->> {true, "cadena", 3}.1;;
-true : Bool
+>> tuple = {true, {"cadena1", "cadena2"}, 3};;
+tuple : {Bool, {String, String}, Nat} = {true, {"cadena1", "cadena2"}, 3}
 
->> {true, {"cadena1", "cadena2"}, 3}.2.1;;
-"cadena1" : String
+>> tuple.2.1;;
+- : String = "cadena1"
+
+>> record = {a = 1, tuple = {23, 24}, y = true};;
+record : {a:Nat, tuple:{Nat, Nat}, y:Bool} = {a=1, tuple={23, 24}, y=true}
+
+>> record.tuple.1;;
+- : Nat = 23
+
+>> l1 = cons[Nat] 1 cons[Nat] 2 cons[Nat] 3 nil[Nat];;
+l1 : List[Nat] = cons[Nat] 1 cons[Nat] 2 cons[Nat] 3 nil[Nat]
+
+>> len = letrec len : List[Nat] -> Nat =
+    Ll : List[Nat]. if isnil[Nat] l then 0 
+        else succ (len tail[Nat] l)
+    in len;;
+len : (List[Nat]) -> (Nat) = lambda l:List[Nat]. if isnil[Nat] l then 0 else succ ((fix (lambda len:(List[Nat]) -> (Nat). lambda l:List[Nat]. if isnil[Nat] l then 0 else succ (len (tail[Nat] l)))) (tail[Nat] l))
+
+>> len l1;;
+- : Nat = 3
+
+>> letrec len : (List[Nat]) -> (Nat) = lambda l:List[Nat]. if isnil[Nat] l then 0 else succ ((fix (lambda len:(List[Nat]) -> (Nat). lambda l:List[Nat]. if isnil[Nat] l then 0 else succ (len (tail[Nat] l)))) (tail[Nat] l)) in len l1;;
+- : Nat = 3
+
+>> l2 = cons[Nat] 4 cons[Nat] 5 nil[Nat];;
+l2 : List[Nat] = cons[Nat] 4 cons[Nat] 5 nil[Nat]
+
+////////////////////////////////////////////////////////////////////////////////////////////
+//letrec append: List[Nat] -> List[Nat] -> List[Nat] = L l1 : List[Nat]. L l2 : List[Nat].//
+//    if isnil[Nat] l1 then l2 else cons[Nat] (head[Nat] l1) (append (tail[Nat] l1) l2)   //   NO FUNCA PORQUE LOS TIPOS DE LAS LISTAS NO SON IGUALES AL PARECER (sí lo son)
+//    in append l1 l2;;                                                                   //
+////////////////////////////////////////////////////////////////////////////////////////////
