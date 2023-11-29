@@ -44,7 +44,6 @@ type command =
   | Bind of string * term
 ;;
 
-
 (* CONTEXT MANAGEMENT *)
 
 let emptyctx =
@@ -69,7 +68,7 @@ let rec string_of_ty ty =
   | TyNat ->
       "Nat"
   | TyArr (ty1, ty2) ->
-      "(" ^ string_of_ty ty1 ^ ")" ^ " -> " ^ "(" ^ string_of_ty ty2 ^ ")"
+      string_of_ty ty1 ^ " -> " ^ string_of_ty ty2
   | TyString ->
       "String"
   | TyTuple ty ->
@@ -174,7 +173,7 @@ let rec typeof ctx tm =
     (* T-Concat *)
   | TmConcat (t1, t2) ->
       if typeof ctx t1 = TyString && typeof ctx t2 = TyString then TyString
-      else raise (Type_error "argument of concat is not a string")
+      else raise (Type_error "argument is not a string")
 
     (* T-Tuple *)
   | TmTuple t1 ->
@@ -205,7 +204,8 @@ let rec typeof ctx tm =
           TyList ty21 ->
             if ty21 = tyT1 then TyList ty
             else raise (Type_error "list types don't match")
-        | _ -> raise (Type_error "list type expected"))
+        | _ -> raise (Type_error "list type expected")
+      )
   
     (* T-Isnil *)
   | TmIsnil (ty, t1) ->
@@ -218,7 +218,7 @@ let rec typeof ctx tm =
   | TmHead (ty, t1) ->
       let tyT1 = typeof ctx t1 in
       (match tyT1 with
-          TyList _ -> TyBool
+          TyList _ -> ty
         | _ -> raise (Type_error "list type expected"))
 
     (* T-Tail *)
@@ -296,22 +296,22 @@ let rec string_of_term = function
 
 and string_of_if t = 
   match t with
-      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+      TmApp (t1, t2) -> string_of_app t1  ^ " " ^ string_of_app t2
     | _ -> string_of_term t
 
 and string_of_then_else t = 
   match t with
-      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+      TmApp (t1, t2) -> string_of_app t1  ^ " " ^ string_of_app t2
     | _ -> string_of_term t
 
 and string_of_succ t = 
   match t with
       TmPred t1 -> string_of_term t
-    | _ ->  "(" ^ string_of_term t ^ ")"
+    | _ ->  string_of_term t
 
 and string_of_abs t = 
   match t with
-      TmApp (t1, t2) -> "(" ^ string_of_app t1  ^ " " ^ string_of_app t2 ^ ")"
+      TmApp (t1, t2) -> string_of_app t1  ^ " " ^ string_of_app t2
     | _ -> string_of_term t
 
 and string_of_app t = 
