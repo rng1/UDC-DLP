@@ -6,6 +6,7 @@ type ty =
   | TyTuple of ty list
   | TyRecord of (string * ty) list
   | TyList of ty
+  | TyVarTy of string
 ;;
 
 type 'a context =
@@ -50,6 +51,7 @@ val getbinding : 'a context -> string -> 'a;;
 val string_of_ty : ty -> string;;
 exception Type_error of string;;
 val typeof : ty context -> term -> ty;;
+val typeofTy : ty context -> ty -> ty;;
 
 val string_of_term : term -> string;;
 exception NoRuleApplies;;
