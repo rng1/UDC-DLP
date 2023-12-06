@@ -118,12 +118,11 @@ let rec typeofTy ctx ty =
         TyBool
     | TyNat ->
         TyNat
-    | TyArr (ty1, ty2) ->
-        TyArr (typeofTy ctx ty1, typeofTy ctx ty2)
     | TyString ->
         TyString
     | TyVarTy s ->
         getbinding ctx s
+    | _ -> raise (Type_error "typeofTy type not supported")
 ;;
 
 let rec typeof ctx tm = 
@@ -216,6 +215,13 @@ let rec typeof ctx tm =
     (* T-Record *)
   | TmRecord t1 ->
       TyRecord (List.combine (List.map fst t1) (List.map (typeof ctx) (List.map snd t1)))
+      (* 
+        Pilla las claves del registro (fst de t1) y encuentra los tipos de los segundos elementos de cada tupla. Después combina las tuplas resultantes en una lista
+        {x=1, a="a"} =
+          List.map fst t1 : [x, a]
+          List.map snd t1 : [1, "a"] ---> List.map (typeof ctx) : [TmNat 1, TmString "a"]
+          List.combine : [(x, TmNat 1), (a, TmString "a")]
+      *)
 
     (* T-Proj *)
   | TmProj (t, s) ->
@@ -707,6 +713,6 @@ let execute (vctx, tctx) = function
       (addbinding vctx s tm', addbinding tctx s tyTm)
     | BindTy (s, ty) ->
       let tyTy = typeofTy tctx ty in
-      print_endline (s ^ " = " ^ string_of_ty tyTy);
+      print_endline ("- : " ^ s ^ " = " ^ string_of_ty tyTy);
       (vctx, addbinding tctx s tyTy)
 ;;
