@@ -24,22 +24,23 @@ type term =
   | TmAbs of string * ty * term
   | TmApp of term * term
   | TmLetIn of string * term * term
-  | TmFix of term (* TODO: no funciona? *)
+  | TmFix of term
   | TmString of string
   | TmConcat of term * term
   | TmTuple of term list
   | TmRecord of (string * term) list
   | TmProj of term * string
-  | TmNil of ty
+  | TmEmpty of ty
   | TmCons of ty * term * term
-  | TmIsnil of ty * term
+  | TmIsempty of ty * term
   | TmHead of ty * term
   | TmTail of ty * term
 ;;
 
 type command =
     Eval of term
-  | Bind of string * term
+  | BindTm of string * term
+  | BindTy of string * ty
 ;;
 
 val emptyctx : 'a context;;
