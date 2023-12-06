@@ -139,6 +139,8 @@ atomicTy :
       { TyNat }
   | STRING
       { TyString }
+  | IDTY
+      { TyVarTy $1 }
   | LIST LBRACKET ty RBRACKET
       { TyList $3 }
   | LBRACE recordTy RBRACE
@@ -151,11 +153,11 @@ tupleTerm :
       { $1 :: $3 }
 
 recordTerm :
-    { [] }
-  | IDV EQ term
+    IDV EQ term
       { [($1, $3)] }
   | IDV EQ term COMMA recordTerm
       { ($1, $3) :: $5 }
+  | { [] }
 
 recordTy :
     { [] }
