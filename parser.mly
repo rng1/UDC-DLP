@@ -16,9 +16,9 @@
 %token FIX
 %token IN
 %token CONCAT
-%token NIL
+%token EMPTY
 %token CONS
-%token ISNIL
+%token ISEMPTY
 %token HEAD
 %token TAIL
 %token BOOL
@@ -41,6 +41,7 @@
 
 %token <int> INTV
 %token <string> IDV
+%token <string> IDTY
 %token <string> STRINGV
 
 %start s
@@ -50,7 +51,9 @@
 
 s :
     IDV EQ term EOF
-      { Bind ($1, $3) }
+      { BindTm ($1, $3) }
+  | IDTY EQ ty EOF
+      { BindTy ($1, $3) }
   | term EOF
       { Eval $1 }
 
@@ -97,12 +100,12 @@ atomicTerm :
       { TmTuple $2 }
   | LBRACE recordTerm RBRACE
       { TmRecord $2 }
-  | NIL LBRACKET ty RBRACKET
-      { TmNil $3 }
+  | EMPTY LBRACKET ty RBRACKET
+      { TmEmpty $3 }
   | CONS LBRACKET ty RBRACKET atomicTerm atomicTerm
       { TmCons ($3, $5, $6) }
-  | ISNIL LBRACKET ty RBRACKET atomicTerm
-      { TmIsnil ($3, $5) }
+  | ISEMPTY LBRACKET ty RBRACKET atomicTerm
+      { TmIsempty ($3, $5) }
   | HEAD LBRACKET ty RBRACKET atomicTerm
       { TmHead ($3, $5) }
   | TAIL LBRACKET ty RBRACKET atomicTerm
@@ -121,7 +124,6 @@ atomicTerm :
   | STRINGV
       { TmString $1 }
 
-
 ty :
     atomicTy
       { $1 }
@@ -139,6 +141,8 @@ atomicTy :
       { TyString }
   | LIST LBRACKET ty RBRACKET
       { TyList $3 }
+  | LBRACE recordTy RBRACE
+      { TyRecord $2 }
 
 tupleTerm :
     term
@@ -147,7 +151,15 @@ tupleTerm :
       { $1 :: $3 }
 
 recordTerm :
-    IDV EQ term
+    { [] }
+  | IDV EQ term
       { [($1, $3)] }
   | IDV EQ term COMMA recordTerm
+      { ($1, $3) :: $5 }
+
+recordTy :
+    { [] }
+  | IDV COLON ty
+      { [($1, $3)] }
+  | IDV COLON ty COMMA recordTy
       { ($1, $3) :: $5 }
