@@ -1,29 +1,26 @@
  ## FIXED-POINT COMBINER
 
 ``` Ocaml
-prod = letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat. 
+letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat. 
     if iszero n then m else succ (sum (pred n) m)
     in letrec prod : Nat -> Nat -> Nat = L m:Nat. L n:Nat.
         if iszero m then 0 else sum n (prod (pred m) n)
-        in prod;;
-prod 5 10;;
+        in prod 5 10;;
 
-fact = letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat. 
+letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat. 
     if iszero n then m else succ (sum (pred n) m)
     in letrec prod : Nat -> Nat -> Nat = L m:Nat. L n:Nat. 
         if iszero m then 0 else sum n (prod (pred m) n)
         in letrec fact : Nat -> Nat =  L n:Nat. 
             if iszero n then 1 else prod n (fact (pred n))
-            in fact;;
-fact 5;;
+            in fact 5;;
 
-fib = letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat.
+letrec sum : Nat -> Nat -> Nat = L n:Nat. L m:Nat.
     if iszero n then m else succ (sum (pred n) m)
     in letrec fib : Nat -> Nat = L n:Nat. 
         if iszero n then 0 else 
             if iszero (pred n) then 1 else sum (fib (pred (pred n))) (fib (pred n)) 
-            in fib;;
-fib 10;;
+            in fib 10;;
 ```
 
  ## GLOBAL DEFINITION CONTEXT
