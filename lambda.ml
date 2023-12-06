@@ -8,6 +8,7 @@ type ty =
   | TyTuple of ty list
   | TyRecord of (string * ty) list
   | TyList of ty
+  | TyVarTy of string
 ;;
 
 type 'a context =
@@ -88,6 +89,8 @@ let rec string_of_ty ty =
       in "{" ^ print_tyRecord ty ^ "}"
   | TyList ty ->
       "List[" ^ string_of_ty ty ^ "] "
+  | TyVarTy s ->
+      s
 ;;
 
 exception Type_error of string
@@ -107,6 +110,20 @@ let rec subtypeof tm1 tm2 =
     in contains l1 l2
   | (TyArr(s1, s2), TyArr(t1, t2)) -> subtypeof s1 t1 && subtypeof t2 s2
   | (tm1, tm2) -> tm1 = tm2
+;;
+
+let rec typeofTy ctx ty =
+  match ty with
+      TyBool ->
+        TyBool
+    | TyNat ->
+        TyNat
+    | TyArr (ty1, ty2) ->
+        TyArr (typeofTy ctx ty1, typeofTy ctx ty2)
+    | TyString ->
+        TyString
+    | TyVarTy s ->
+        getbinding ctx s
 ;;
 
 let rec typeof ctx tm = 
@@ -683,9 +700,13 @@ let execute (vctx, tctx) = function
       let tm' = eval vctx tm in
       print_endline ("- : " ^ string_of_ty tyTm ^ " = " ^ string_of_term tm');
       (vctx, tctx)
-  | BindTm (s, tm) ->
+    | BindTm (s, tm) ->
       let tyTm = typeof tctx tm in
       let tm' = eval vctx tm in
       print_endline (s ^ " : " ^ string_of_ty tyTm ^ " = " ^ string_of_term tm');
       (addbinding vctx s tm', addbinding tctx s tyTm)
+    | BindTy (s, ty) ->
+      let tyTy = typeofTy tctx ty in
+      print_endline (s ^ " = " ^ string_of_ty tyTy);
+      (vctx, addbinding tctx s tyTy)
 ;;
