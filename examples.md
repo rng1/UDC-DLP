@@ -82,7 +82,7 @@ in map l1 f;;
 ```
 
 ## SUBTYPING
-```
+``` Ocaml
 (L r:{x:Nat}. r.x) {x = 1, y = 2};;
 (L r:{x:{y:Nat}}. r.x.y) {x = {y = 3}, z = 4};;
 (L f:{x:Nat, y:Nat} -> {x:Nat, y:Nat}. f {x = 5, y = 6}) (L x:{x:Nat, y:Nat}. {x = x.x, y = x.x});;
